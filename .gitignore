@@ -1,0 +1,10 @@
+# MATLAB
+*.asv
+*.m~
+*.mat
+*.mlx.bak
+*.slxc
+*.mex*
+*.mdl.autosave
+*.simulink.slxc
+*.cache
