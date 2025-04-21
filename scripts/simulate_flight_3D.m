@@ -1,7 +1,5 @@
 % simulate_flight_3D.m
 
-clc; close all;
-
 rootPath = fileparts(fileparts(mfilename('fullpath')));
 addpath(fullfile(rootPath, 'functions'));
 
