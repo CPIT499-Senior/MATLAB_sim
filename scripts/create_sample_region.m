@@ -1,7 +1,5 @@
 % create_sample_region.m - Define region bounds for scan (from app or default)
 
-clc;
-
 % Region corners (can be overridden by Flutter app later)
 region.topLeft = [21.4858, 39.1920];       % [Latitude, Longitude]
 region.bottomRight = [21.4825, 39.1982];   % [Latitude, Longitude]

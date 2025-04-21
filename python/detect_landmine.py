@@ -1,36 +1,30 @@
-# detect_landmines.py
+# detect_landmine.py
 
 import os
 import json
 from ultralytics import YOLO
 import cv2
+import utm
 
-# Load YOLO model
 model = YOLO("models/best.pt")
-
-# Directories
-image_dir = "data/images"
+image_dir = "data/frames_for_detection"
 output_json = "data/detected_landmines.json"
 scan_region_path = "data/scan_region.json"
 
-# Load GPS boundaries
 with open(scan_region_path, 'r') as f:
     scan_region = json.load(f)
 
-top_left = scan_region["topLeft"]      # [lat, lon]
-bottom_right = scan_region["bottomRight"]  # [lat, lon]
+top_left = scan_region["topLeft"]
+bottom_right = scan_region["bottomRight"]
 
-# Convert lat/lon to UTM
-import utm
 topLeftX, topLeftY, zone, _ = utm.from_latlon(*top_left)
 bottomRightX, bottomRightY, _, _ = utm.from_latlon(*bottom_right)
 
 utmWidth = abs(bottomRightX - topLeftX)
 utmHeight = abs(bottomRightY - topLeftY)
 
-# Run detection
 results = []
-for fname in os.listdir(image_dir):
+for fname in sorted(os.listdir(image_dir)):
     if not fname.lower().endswith(".jpg"):
         continue
 
@@ -38,24 +32,24 @@ for fname in os.listdir(image_dir):
     img = cv2.imread(path)
     h, w = img.shape[:2]
 
-    detections = model(path)[0].boxes.xywh.cpu().numpy()  # [x_center, y_center, w, h]
+    detections = model(path)[0].boxes.xywh.cpu().numpy()
 
     for (cx, cy, _, _) in detections:
-        # Normalize
         relX = cx / w
         relY = cy / h
-
         utm_x = topLeftX + relX * utmWidth
         utm_y = topLeftY + relY * utmHeight
-
         lat, lon = utm.to_latlon(utm_x, utm_y, zone, northern=True)
         results.append({
             "lat": lat,
-            "lon": lon
+            "lon": lon,
+            "source": fname
         })
 
-# Save to JSON
+# Save and print
 with open(output_json, "w") as f:
     json.dump(results, f, indent=2)
 
-print(f"✅ Saved {len(results)} detected landmines to {output_json}")
+print(f"✅ YOLO detected {len(results)} landmines from drone-collected images:\n")
+for r in results:
+    print(f"- {r['source']}: ({r['lat']:.6f}, {r['lon']:.6f})")

@@ -1,57 +1,47 @@
 % place_landmines_test.m
-clc;
 
-% Get full path to the current script folder
 scriptFolder = fileparts(mfilename('fullpath'));
-
-% Add functions path (for deg2utm, etc.)
 addpath(fullfile(scriptFolder, '..', 'functions'));
 
-% Load scan region
 region = jsondecode(fileread(fullfile(scriptFolder, '..', 'data', 'scan_region.json')));
 [topLeftX, topLeftY, zone] = deg2utm(region.topLeft(1), region.topLeft(2));
 [bottomRightX, bottomRightY, ~] = deg2utm(region.bottomRight(1), region.bottomRight(2));
 
-% Load images (case-insensitive, all types)
-imgFolder = fullfile(scriptFolder, '..', 'data', 'images');
-imgFiles1 = dir(fullfile(imgFolder, '*.jpg'));
-imgFiles2 = dir(fullfile(imgFolder, '*.JPG'));
-imgFiles3 = dir(fullfile(imgFolder, '*.jpeg'));
-imgFiles4 = dir(fullfile(imgFolder, '*.JPEG'));
-imgFiles5 = dir(fullfile(imgFolder, '*.png'));
-imgFiles6 = dir(fullfile(imgFolder, '*.PNG'));
-imgFiles = [imgFiles1; imgFiles2; imgFiles3; imgFiles4; imgFiles5; imgFiles6];
-
-if numel(imgFiles) < 3
-    error("❌ Need at least 3 thermal images in data/images.");
+imgSourceFolder = fullfile(scriptFolder, '..', 'data', 'images');
+imgTargetFolder = fullfile(scriptFolder, '..', 'data', 'frames_for_detection');
+if ~exist(imgTargetFolder, 'dir')
+    mkdir(imgTargetFolder);
 end
 
-% Place 3 landmines along the center X path
-xMid = (topLeftX + bottomRightX) / 2;
-yVals = linspace(topLeftY, bottomRightY, 3);
-mines = [];
+imgFiles = dir(fullfile(imgSourceFolder, '*.jpg'));
+if numel(imgFiles) < 10
+    error("❌ Need at least 10 images in data/images/.");
+end
+randImgs = imgFiles(randperm(numel(imgFiles), 10));
 
-for i = 1:3
+% Place mines along vertical line (middle of scan path)
+xMid = (topLeftX + bottomRightX) / 2;
+yVals = linspace(topLeftY, bottomRightY, 10);
+
+mines = [];
+for i = 1:10
     mine.utm_x = xMid;
     mine.utm_y = yVals(i);
     [mine.lat, mine.lon] = utm2deg(mine.utm_x, mine.utm_y, zone);
-    mine.image = imgFiles(i).name;
+    mine.image = sprintf('frame_%04d.jpg', i-1);
+
+    % Copy real image to frames_for_detection
+    src = fullfile(imgSourceFolder, randImgs(i).name);
+    dst = fullfile(imgTargetFolder, mine.image);
+    copyfile(src, dst);
+
     mines = [mines; mine];
 end
 
-% Save to JSON file
+% Save mines
 outPath = fullfile(scriptFolder, '..', 'data', 'mines.json');
-outDir = fileparts(outPath);
-if ~exist(outDir, 'dir')
-    mkdir(outDir);
-end
-
 fid = fopen(outPath, 'w');
-if fid == -1
-    error("❌ Could not open %s for writing. Check folder permissions.", outPath);
-end
-
 fwrite(fid, jsonencode(mines, 'PrettyPrint', true));
 fclose(fid);
 
-fprintf("✅ Test mines saved to: %s\n", outPath);
+fprintf("✅ 10 landmines placed along path and saved to: %s\n", outPath);
