@@ -1,19 +1,39 @@
-% create_sample_region.m - Define region bounds for scan (from app or default)
+% create_sample_region.m - Define region bounds for scan (from Flutter app)
 
-% Region corners (can be overridden by Flutter app later)
-region.topLeft = [21.4858, 39.1920];       % [Latitude, Longitude]
-region.bottomRight = [21.4825, 39.1982];   % [Latitude, Longitude]
-region.altitude = 10;                      % Drone scan altitude in meters
-region.step = 5;                           % Meters between lawnmower passes
-
-% Save to JSON
+% Construct the path to the region JSON file
 regionPath = fullfile('..', 'data', 'scan_region.json');
-jsonText = jsonencode(region);
 
+% Check if the file exists
+if ~isfile(regionPath)
+    errordlg("Region coordinates not received from Flutter. Terminating run.", "Missing File");
+    return;
+end
+
+% Load and decode the JSON content
+try
+    region = jsondecode(fileread(regionPath));
+catch
+    errordlg("Failed to read or decode scan_region.json", "Read Error");
+    return;
+end
+
+% Validate required fields in the region structure
+requiredFields = {'topLeft', 'bottomRight', 'altitude', 'step'};
+for i = 1:numel(requiredFields)
+    if ~isfield(region, requiredFields{i})
+        errordlg(['scan_region.json is missing required field: ', requiredFields{i}], "Invalid Format");
+        return;
+    end
+end
+
+% Re-save the validated region to ensure formatting consistency
+jsonText = jsonencode(region);
 fid = fopen(regionPath, 'w');
 if fid == -1
-    error("❌ Unable to write region data.");
+    errordlg("Unable to write region data.", "Write Error");
+    return;
 end
-fwrite(fid, jsonText, 'char'); fclose(fid);
+fwrite(fid, jsonText, 'char');
+fclose(fid);
 
-disp("✅ Region saved to scan_region.json");
+disp("Region received from Flutter and saved to scan_region.json");

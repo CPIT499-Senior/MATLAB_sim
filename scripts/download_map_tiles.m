@@ -1,54 +1,62 @@
 % download_map_tiles.m - Downloads satellite tiles from MapTiler and stitches them
 
-% Load scan region
+% Load scan region configuration
 scanPath = fullfile('..', 'data', 'scan_region.json');
 if ~isfile(scanPath)
-    error("❌ Region file not found.");
+    errordlg("scan_region.json not found.", "Missing File");
+    return;
 end
-region = jsondecode(fileread(scanPath));
 
-% MapTiler setup
-apiKey = 'ab2lsvlzfavhhf4Ie90A';  % ✅ Replace with your own key
+% Decode region file
+try
+    region = jsondecode(fileread(scanPath));
+catch
+    errordlg("Failed to read or parse scan_region.json", "Read Error");
+    return;
+end
+
+% MapTiler API and tile settings
+apiKey = 'ab2lsvlzfavhhf4Ie90A';
 zoom = 18;
 tileSize = 640;
 mapStyle = 'satellite';
 
-% Convert region corners to pixel coordinates (approx)
-[centerX, centerY, tileX1, tileY1] = latlon_to_tile(region.topLeft(1), region.topLeft(2), zoom);
+% Convert top-left and bottom-right coordinates to tile indices
+[~, ~, tileX1, tileY1] = latlon_to_tile(region.topLeft(1), region.topLeft(2), zoom);
 [~, ~, tileX2, tileY2] = latlon_to_tile(region.bottomRight(1), region.bottomRight(2), zoom);
 
+% Loop through tiles to download and stitch them
 xTiles = tileX1:tileX2;
 yTiles = tileY1:tileY2;
-
 stitchedImg = [];
 for y = yTiles
     rowImg = [];
     for x = xTiles
-        tileCenter = tile_to_latlon(x + 0.5, y + 0.5, zoom);  % Center of tile
-        url = sprintf( ...
-            'https://api.maptiler.com/maps/%s/static/%f,%f,%d/%dx%d.png?key=%s', ...
+        tileCenter = tile_to_latlon(x + 0.5, y + 0.5, zoom);
+        url = sprintf('https://api.maptiler.com/maps/%s/static/%f,%f,%d/%dx%d.png?key=%s', ...
             mapStyle, tileCenter(2), tileCenter(1), zoom, tileSize, tileSize, apiKey);
-
         try
             tileImg = webread(url);
         catch
-            warning("⚠️ Failed to download tile (%d, %d): %s", x, y, url);
-            tileImg = ones(tileSize, tileSize, 3);
+            warning("Failed to download tile (%d, %d): %s", x, y, url);
+            tileImg = ones(tileSize, tileSize, 3);  % fallback tile
         end
-
-
         rowImg = [rowImg, tileImg];
     end
     stitchedImg = [stitchedImg; rowImg];
 end
 
-% Save final stitched image
+% Save final stitched image to disk
 destPath = fullfile('..', 'data', 'map_image.png');
-imwrite(stitchedImg, destPath);
-fprintf("✅ Stitched satellite map saved: %s\n", destPath);
+try
+    imwrite(stitchedImg, destPath);
+catch
+    errordlg("Failed to write map_image.png", "Write Error");
+    return;
+end
+fprintf("Stitched satellite map saved: %s\n", destPath);
 
-
-% --- Helper functions ---
+% Convert lat/lon to tile coordinates and pixel positions
 function [px, py, tileX, tileY] = latlon_to_tile(lat, lon, zoom)
     n = 2^zoom;
     lat_rad = deg2rad(lat);
@@ -58,6 +66,7 @@ function [px, py, tileX, tileY] = latlon_to_tile(lat, lon, zoom)
     tileY = floor(py / 256);
 end
 
+% Convert tile indices back to lat/lon for map centering
 function latlon = tile_to_latlon(x, y, zoom)
     n = 2^zoom;
     lon = x / n * 360 - 180;
